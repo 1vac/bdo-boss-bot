@@ -72,7 +72,23 @@ async function fetchBossTimers(region = 'MENA') {
   }
 
   const data = await response.json();
-  return data; // array of boss spawn objects
+
+  // Handle different API response shapes:
+  // - plain array: [...]
+  // - object with array inside: { bosses: [...] } or { data: [...] } or { schedule: [...] }
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.bosses))   return data.bosses;
+  if (Array.isArray(data.data))     return data.data;
+  if (Array.isArray(data.schedule)) return data.schedule;
+  if (Array.isArray(data.timers))   return data.timers;
+
+  // If it's an object of boss entries (keyed by name), convert to array
+  if (typeof data === 'object' && data !== null) {
+    const values = Object.values(data);
+    if (values.length > 0 && typeof values[0] === 'object') return values;
+  }
+
+  throw new Error(`Unexpected API response format: ${JSON.stringify(data).slice(0, 200)}`);
 }
 
 /**
