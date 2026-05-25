@@ -1,124 +1,145 @@
 /**
- * garmoth.js — Garmoth.com API helper
+ * garmoth.js — BDO Boss Schedule (hardcoded weekly schedule)
  *
- * Base URL : https://api.garmoth.com
- * Key endpoint: GET /api/boss-timer?region=REGION_ID
+ * BDO world bosses follow a fixed weekly schedule.
+ * Times are in UTC. MENA server = UTC+3.
  *
- * Region IDs (as used by Garmoth internally):
- *   NA         → 1
- *   EU         → 2
- *   SA         → 3   (South America)
- *   SEA        → 4   (South East Asia)
- *   MENA       → 5   (Middle East & North Africa)
- *   ConsoleNA  → 6
- *   ConsoleEU  → 7
+ * Schedule source: community-verified BDO boss timer
  */
 
-const fetch = require('node-fetch');
-
-const BASE_URL = 'https://api.garmoth.com';
-
-const REGION_IDS = {
-  NA:        1,
-  EU:        2,
-  SA:        3,
-  SEA:       4,
-  MENA:      5,
-  CONSOLENA: 6,
-  CONSOLEEU: 7,
-};
-
-// Boss display names and their thumbnail images
+// Boss metadata
 const BOSS_META = {
-  Kzarka:       { emoji: '🔴', color: 0xe74c3c, image: 'https://garmoth.com/images/bosses/kzarka.png' },
-  Karanda:      { emoji: '🟣', color: 0x9b59b6, image: 'https://garmoth.com/images/bosses/karanda.png' },
-  Nouver:       { emoji: '🔵', color: 0x3498db, image: 'https://garmoth.com/images/bosses/nouver.png' },
-  Kutum:        { emoji: '🟠', color: 0xe67e22, image: 'https://garmoth.com/images/bosses/kutum.png' },
-  Offin:        { emoji: '🟡', color: 0xf1c40f, image: 'https://garmoth.com/images/bosses/offin.png' },
-  Quint:        { emoji: '⚪', color: 0xbdc3c7, image: 'https://garmoth.com/images/bosses/quint.png' },
-  Muraka:       { emoji: '🟤', color: 0x8b6914, image: 'https://garmoth.com/images/bosses/muraka.png' },
-  Vell:         { emoji: '🌊', color: 0x1abc9c, image: 'https://garmoth.com/images/bosses/vell.png' },
-  Garmoth:      { emoji: '🐉', color: 0xc0392b, image: 'https://garmoth.com/images/bosses/garmoth.png' },
-  Bellocan:     { emoji: '🌙', color: 0x6c3483, image: 'https://garmoth.com/images/bosses/bellocan.png' },
+  Kzarka:   { emoji: '🔴', color: 0xe74c3c },
+  Karanda:  { emoji: '🟣', color: 0x9b59b6 },
+  Nouver:   { emoji: '🔵', color: 0x3498db },
+  Kutum:    { emoji: '🟠', color: 0xe67e22 },
+  Offin:    { emoji: '🟡', color: 0xf1c40f },
+  Quint:    { emoji: '⚪', color: 0xbdc3c7 },
+  Muraka:   { emoji: '🟤', color: 0x8b6914 },
+  Vell:     { emoji: '🌊', color: 0x1abc9c },
+  Garmoth:  { emoji: '🐉', color: 0xc0392b },
+  Bellocan: { emoji: '🌙', color: 0x6c3483 },
 };
 
 /**
- * Normalise a region string → Garmoth region ID number
+ * MENA Boss Schedule — sourced from mmotimer.com/bdo/?server=mena
+ *
+ * MENA server runs on TRT (Turkey Time = UTC+3).
+ * All times below are stored in UTC (TRT minus 3 hours).
+ * day: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday,
+ *      4=Thursday, 5=Friday, 6=Saturday  (UTC day)
  */
-function getRegionId(region = 'MENA') {
-  const key = region.toUpperCase().replace(/\s/g, '');
-  return REGION_IDS[key] ?? REGION_IDS.MENA;
+const BOSS_SCHEDULE = [
+  // ── Sunday UTC (= Sunday TRT 03:00+ and Monday TRT 00:00-02:59) ──
+  { day: 0, hour: 8,  minute: 0,  name: 'Kzarka'  },  // Sun 11:00 TRT
+  { day: 0, hour: 8,  minute: 0,  name: 'Nouver'  },  // Sun 11:00 TRT
+  { day: 0, hour: 13, minute: 0,  name: 'Karanda' },  // Sun 16:00 TRT
+  { day: 0, hour: 13, minute: 0,  name: 'Kutum'   },  // Sun 16:00 TRT
+  { day: 0, hour: 15, minute: 0,  name: 'Vell'    },  // Sun 18:00 TRT
+  { day: 0, hour: 17, minute: 0,  name: 'Nouver'  },  // Sun 20:00 TRT
+  { day: 0, hour: 17, minute: 0,  name: 'Kutum'   },  // Sun 20:00 TRT
+  { day: 0, hour: 20, minute: 15, name: 'Garmoth' },  // Sun 23:15 TRT
+  { day: 0, hour: 22, minute: 0,  name: 'Kzarka'  },  // Mon 01:00 TRT
+
+  // ── Monday UTC ──
+  { day: 1, hour: 8,  minute: 0,  name: 'Kzarka'  },  // Mon 11:00 TRT
+  { day: 1, hour: 8,  minute: 0,  name: 'Nouver'  },  // Mon 11:00 TRT
+  { day: 1, hour: 13, minute: 0,  name: 'Kzarka'  },  // Mon 16:00 TRT
+  { day: 1, hour: 13, minute: 0,  name: 'Kutum'   },  // Mon 16:00 TRT
+  { day: 1, hour: 17, minute: 0,  name: 'Karanda' },  // Mon 20:00 TRT
+  { day: 1, hour: 17, minute: 0,  name: 'Nouver'  },  // Mon 20:00 TRT
+  { day: 1, hour: 20, minute: 15, name: 'Offin'   },  // Mon 23:15 TRT
+  { day: 1, hour: 22, minute: 0,  name: 'Kutum'   },  // Tue 01:00 TRT
+
+  // ── Tuesday UTC ──
+  { day: 2, hour: 8,  minute: 0,  name: 'Kzarka'  },  // Tue 11:00 TRT
+  { day: 2, hour: 8,  minute: 0,  name: 'Kutum'   },  // Tue 11:00 TRT
+  { day: 2, hour: 13, minute: 0,  name: 'Karanda' },  // Tue 16:00 TRT
+  { day: 2, hour: 13, minute: 0,  name: 'Nouver'  },  // Tue 16:00 TRT
+  { day: 2, hour: 17, minute: 0,  name: 'Quint'   },  // Tue 20:00 TRT
+  { day: 2, hour: 17, minute: 0,  name: 'Muraka'  },  // Tue 20:00 TRT
+  { day: 2, hour: 20, minute: 15, name: 'Garmoth' },  // Tue 23:15 TRT
+  { day: 2, hour: 22, minute: 0,  name: 'Karanda' },  // Wed 01:00 TRT
+  { day: 2, hour: 22, minute: 0,  name: 'Offin'   },  // Wed 01:00 TRT
+
+  // ── Wednesday UTC ──
+  { day: 3, hour: 8,  minute: 0,  name: 'Nouver'  },  // Wed 11:00 TRT
+  { day: 3, hour: 8,  minute: 0,  name: 'Kutum'   },  // Wed 11:00 TRT
+  { day: 3, hour: 13, minute: 0,  name: 'Kzarka'  },  // Wed 16:00 TRT
+  { day: 3, hour: 13, minute: 0,  name: 'Nouver'  },  // Wed 16:00 TRT
+  { day: 3, hour: 17, minute: 0,  name: 'Karanda' },  // Wed 20:00 TRT
+  { day: 3, hour: 17, minute: 0,  name: 'Kzarka'  },  // Wed 20:00 TRT
+  { day: 3, hour: 21, minute: 15, name: 'Vell'    },  // Thu 00:15 TRT
+  { day: 3, hour: 22, minute: 0,  name: 'Kzarka'  },  // Thu 01:00 TRT
+
+  // ── Thursday UTC ──
+  { day: 4, hour: 8,  minute: 0,  name: 'Kzarka'  },  // Thu 11:00 TRT
+  { day: 4, hour: 8,  minute: 0,  name: 'Nouver'  },  // Thu 11:00 TRT
+  { day: 4, hour: 13, minute: 0,  name: 'Karanda' },  // Thu 16:00 TRT
+  { day: 4, hour: 13, minute: 0,  name: 'Kutum'   },  // Thu 16:00 TRT
+  { day: 4, hour: 17, minute: 0,  name: 'Nouver'  },  // Thu 20:00 TRT
+  { day: 4, hour: 17, minute: 0,  name: 'Kutum'   },  // Thu 20:00 TRT
+  { day: 4, hour: 20, minute: 15, name: 'Garmoth' },  // Thu 23:15 TRT
+  { day: 4, hour: 22, minute: 0,  name: 'Nouver'  },  // Fri 01:00 TRT
+
+  // ── Friday UTC ──
+  { day: 5, hour: 8,  minute: 0,  name: 'Kzarka'  },  // Fri 11:00 TRT
+  { day: 5, hour: 8,  minute: 0,  name: 'Kutum'   },  // Fri 11:00 TRT
+  { day: 5, hour: 13, minute: 0,  name: 'Nouver'  },  // Fri 16:00 TRT
+  { day: 5, hour: 17, minute: 0,  name: 'Kzarka'  },  // Fri 20:00 TRT
+  { day: 5, hour: 17, minute: 0,  name: 'Kutum'   },  // Fri 20:00 TRT
+  { day: 5, hour: 20, minute: 15, name: 'Offin'   },  // Fri 23:15 TRT
+  { day: 5, hour: 22, minute: 0,  name: 'Karanda' },  // Sat 01:00 TRT
+
+  // ── Saturday UTC ──
+  { day: 6, hour: 8,  minute: 0,  name: 'Nouver'  },  // Sat 11:00 TRT
+  { day: 6, hour: 8,  minute: 0,  name: 'Kutum'   },  // Sat 11:00 TRT
+  { day: 6, hour: 13, minute: 0,  name: 'Karanda' },  // Sat 16:00 TRT
+  { day: 6, hour: 13, minute: 0,  name: 'Kzarka'  },  // Sat 16:00 TRT
+  { day: 6, hour: 16, minute: 0,  name: 'Quint'   },  // Sat 19:00 TRT
+  { day: 6, hour: 16, minute: 0,  name: 'Muraka'  },  // Sat 19:00 TRT
+  { day: 6, hour: 22, minute: 15, name: 'Karanda' },  // Sun 01:15 TRT
+];
+
+/**
+ * Get the next spawn Date object for a schedule entry, from a given 'now'
+ */
+function nextSpawnDate(entry, now) {
+  const d = new Date(now);
+  d.setUTCHours(entry.hour, entry.minute, 0, 0);
+
+  // Find how many days until the next occurrence of entry.day
+  const todayDay = d.getUTCDay();
+  let daysUntil = (entry.day - todayDay + 7) % 7;
+
+  // If it's today but time has already passed, push to next week
+  if (daysUntil === 0 && d.getTime() <= now) daysUntil = 7;
+
+  d.setUTCDate(d.getUTCDate() + daysUntil);
+  return d;
 }
 
 /**
- * Fetch boss timer data from Garmoth
- * @param {string} region  e.g. 'MENA', 'EU', 'NA'
- * @returns {Promise<Array>} Array of boss spawn objects
+ * Get the next N upcoming boss spawns
+ * @param {string} region  (kept for API compatibility, schedule is global)
+ * @param {number} limit
+ * @returns {Array} sorted array of { name, spawnTime (Date) }
  */
-async function fetchBossTimers(region = 'MENA') {
-  const regionId = getRegionId(region);
-  const url = `${BASE_URL}/api/boss-timer?region=${regionId}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'application/json',
-      'Origin': 'https://garmoth.com',
-      'Referer': 'https://garmoth.com/',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Garmoth API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-
-  // Handle different API response shapes:
-  // - plain array: [...]
-  // - object with array inside: { bosses: [...] } or { data: [...] } or { schedule: [...] }
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.bosses))   return data.bosses;
-  if (Array.isArray(data.data))     return data.data;
-  if (Array.isArray(data.schedule)) return data.schedule;
-  if (Array.isArray(data.timers))   return data.timers;
-
-  // If it's an object of boss entries (keyed by name), convert to array
-  if (typeof data === 'object' && data !== null) {
-    const values = Object.values(data);
-    if (values.length > 0 && typeof values[0] === 'object') return values;
-  }
-
-  throw new Error(`Unexpected API response format: ${JSON.stringify(data).slice(0, 200)}`);
-}
-
-/**
- * Get the next N upcoming boss spawns (sorted by time)
- * @param {string} region
- * @param {number} limit   how many bosses to return (default 5)
- */
-async function getUpcomingBosses(region = 'MENA', limit = 5) {
-  const bosses = await fetchBossTimers(region);
+function getUpcomingBosses(region = 'MENA', limit = 5) {
   const now = Date.now();
 
-  // Filter to future spawns and sort ascending
-  const upcoming = bosses
-    .filter(b => {
-      const spawnTime = new Date(b.spawnTime ?? b.nextSpawnTime ?? b.time).getTime();
-      return spawnTime > now;
-    })
-    .sort((a, b) => {
-      const tA = new Date(a.spawnTime ?? a.nextSpawnTime ?? a.time).getTime();
-      const tB = new Date(b.spawnTime ?? b.nextSpawnTime ?? b.time).getTime();
-      return tA - tB;
-    })
-    .slice(0, limit);
+  const spawns = BOSS_SCHEDULE.map(entry => ({
+    name: entry.name,
+    spawnTime: nextSpawnDate(entry, now),
+  }));
 
-  return upcoming;
+  spawns.sort((a, b) => a.spawnTime - b.spawnTime);
+
+  return Promise.resolve(spawns.slice(0, limit));
 }
 
 /**
  * Get the single next boss spawning
- * @param {string} region
  */
 async function getNextBoss(region = 'MENA') {
   const upcoming = await getUpcomingBosses(region, 1);
@@ -126,7 +147,22 @@ async function getNextBoss(region = 'MENA') {
 }
 
 /**
- * Format milliseconds into a human-readable countdown  e.g.  "2h 14m"
+ * Build a Discord embed line for a single boss spawn
+ */
+function formatBossLine(boss) {
+  const name = boss.name ?? 'Unknown';
+  const spawnMs = boss.spawnTime instanceof Date
+    ? boss.spawnTime.getTime()
+    : new Date(boss.spawnTime).getTime();
+
+  const meta = BOSS_META[name] ?? { emoji: '⚔️' };
+  const unixSec = Math.floor(spawnMs / 1000);
+
+  return `${meta.emoji} **${name}** — <t:${unixSec}:t>  (<t:${unixSec}:R>)`;
+}
+
+/**
+ * Format ms into "2h 14m"
  */
 function formatCountdown(ms) {
   if (ms <= 0) return 'Spawning now!';
@@ -137,29 +173,10 @@ function formatCountdown(ms) {
   return `${minutes}m`;
 }
 
-/**
- * Build a Discord embed field value for a single boss spawn
- */
-function formatBossLine(boss) {
-  const name = boss.name ?? boss.bossName ?? 'Unknown';
-  const rawTime = boss.spawnTime ?? boss.nextSpawnTime ?? boss.time;
-  const spawnMs = new Date(rawTime).getTime();
-  const diffMs = spawnMs - Date.now();
-  const meta = BOSS_META[name] ?? { emoji: '⚔️' };
-
-  // Discord timestamp  <t:UNIX:R>  shows live relative time in the client
-  const unixSec = Math.floor(spawnMs / 1000);
-  const discordTs = `<t:${unixSec}:t>  (<t:${unixSec}:R>)`;
-
-  return `${meta.emoji} **${name}** — ${discordTs}`;
-}
-
 module.exports = {
-  fetchBossTimers,
   getUpcomingBosses,
   getNextBoss,
   formatCountdown,
   formatBossLine,
   BOSS_META,
-  REGION_IDS,
 };
