@@ -1,0 +1,9 @@
+# Never upload your secret token!
+.env
+
+# Auto-generated dependencies folder (too large for GitHub)
+node_modules/
+
+# OS junk files
+.DS_Store
+Thumbs.db
